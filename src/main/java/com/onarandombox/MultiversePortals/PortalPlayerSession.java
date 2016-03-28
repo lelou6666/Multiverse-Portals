@@ -7,19 +7,19 @@
 
 package com.onarandombox.MultiversePortals;
 
-import com.fernferret.allpay.multiverse.GenericBank;
-import com.onarandombox.MultiverseCore.api.MultiverseWorld;
-import com.onarandombox.MultiversePortals.utils.MultiverseRegion;
-import com.onarandombox.MultiversePortals.utils.PortalManager;
+import java.util.Date;
+import java.util.logging.Level;
+
+import com.onarandombox.MultiversePortals.enums.MoveType;
 import org.bukkit.ChatColor;
 import org.bukkit.Location;
 import org.bukkit.command.CommandSender;
 import org.bukkit.entity.Player;
-import org.bukkit.event.Event.Type;
 import org.bukkit.util.Vector;
 
-import java.util.Date;
-import java.util.logging.Level;
+import com.onarandombox.MultiverseCore.api.MultiverseWorld;
+import com.onarandombox.MultiversePortals.utils.MultiverseRegion;
+import com.onarandombox.MultiversePortals.utils.PortalManager;
 
 public class PortalPlayerSession {
     private MultiversePortals plugin;
@@ -85,8 +85,10 @@ public class PortalPlayerSession {
     }
 
     private void setStandinginLocation() {
+        // If they're not in a portal and this location is a portal
         if (this.standingIn == null && this.plugin.getPortalManager().isPortal(this.loc)) {
-            this.standingIn = this.plugin.getPortalManager().isPortal(this.getPlayerFromName(), this.loc);
+            this.standingIn = this.plugin.getPortalManager().getPortal(this.loc);
+        // There is no portal here.
         } else if (!this.plugin.getPortalManager().isPortal(this.loc)) {
             this.hasMovedOutOfPortal = true;
             this.standingIn = null;
@@ -95,8 +97,8 @@ public class PortalPlayerSession {
         }
     }
 
-    public boolean doTeleportPlayer(Type eventType) {
-        if (eventType == Type.PLAYER_MOVE && this.getPlayerFromName().isInsideVehicle()) {
+    public boolean doTeleportPlayer(MoveType eventType) {
+        if (eventType == MoveType.PLAYER_MOVE && this.getPlayerFromName().isInsideVehicle()) {
             return false;
         }
         return this.hasMovedOutOfPortal && this.standingIn != null;
@@ -106,22 +108,23 @@ public class PortalPlayerSession {
         return this.loc;
     }
 
-    public void setStaleLocation(Location loc, Type moveType) {
+    public void setStaleLocation(Location loc, MoveType moveType) {
         if (this.getPlayerFromName() == null) {
             // This should never happen, but seems to when someone gets kicked.
             return;
         }
-        if (this.getPlayerFromName().isInsideVehicle() && moveType != Type.VEHICLE_MOVE) {
+        if (this.getPlayerFromName().isInsideVehicle() && moveType != MoveType.VEHICLE_MOVE) {
             return;
         }
-
+        // If the player has not moved, they have a stale location
         if (this.getLocation().getBlockX() == loc.getBlockX() && this.getLocation().getBlockY() == loc.getBlockY() && this.getLocation().getBlockZ() == loc.getBlockZ()) {
             this.setStaleLocation(true);
         } else {
-            this.setLocation(loc); // Update the Players Session to the new Location.
+            // Update the Players Session to the new Location.
+            this.setLocation(loc);
+            // The location is no longer stale.
             this.setStaleLocation(false);
         }
-
     }
 
     public boolean setLeftClickSelection(Vector v, MultiverseWorld world) {
@@ -156,34 +159,37 @@ public class PortalPlayerSession {
     }
 
     public MultiverseRegion getSelectedRegion() {
-        // Did not find WE
-        MultiverseRegion r = null;
-        if (this.plugin.getWEAPI() != null) {
-            System.out.println("WEAPI");
-            try {
-                // GAH this looks SO ugly keeping no imports :( see if I can find a workaround
-                r = new MultiverseRegion(this.plugin.getWEAPI().getSession(this.getPlayerFromName()).getSelection(this.plugin.getWEAPI().getSession(this.getPlayerFromName()).getSelectionWorld()).getMinimumPoint(),
-                        this.plugin.getWEAPI().getSession(this.getPlayerFromName()).getSelection(this.plugin.getWEAPI().getSession(this.getPlayerFromName()).getSelectionWorld()).getMaximumPoint(),
-                        this.plugin.getCore().getMVWorldManager().getMVWorld(this.getPlayerFromName().getWorld().getName()));
-            } catch (Exception e) {
-                this.getPlayerFromName().sendMessage("You haven't finished your selection.");
+        Player player = getPlayerFromName();
+        WorldEditConnection worldEdit = plugin.getWorldEditConnection();
+        if (worldEdit.isConnected()) {
+            if (worldEdit.isSelectionAvailable(player)) {
+                Location minPoint = worldEdit.getSelectionMinPoint(player);
+                Location maxPoint = worldEdit.getSelectionMaxPoint(player);
+                if (minPoint != null && maxPoint != null && minPoint.getWorld().equals(maxPoint.getWorld())) {
+                    return new MultiverseRegion(minPoint, maxPoint,
+                            plugin.getCore().getMVWorldManager().getMVWorld(minPoint.getWorld().getName()));
+                } else {
+                    player.sendMessage("You haven't finished your selection.");
+                return null;
+                }
+            } else {
+                player.sendMessage("You must have a WorldEdit selection to do this.");
                 return null;
             }
-            return r;
         }
         // They're using our crappy selection:
         if (this.leftClick == null) {
-            this.getPlayerFromName().sendMessage("You need to LEFT click on a block with your wand!");
+            player.sendMessage("You need to LEFT click on a block with your wand!");
             return null;
         }
         if (this.rightClick == null) {
-            this.getPlayerFromName().sendMessage("You need to RIGHT click on a block with your wand!");
+            player.sendMessage("You need to RIGHT click on a block with your wand!");
             return null;
         }
         if (!this.leftClickWorld.equals(this.rightClickWorld)) {
-            this.getPlayerFromName().sendMessage("You need to select both coords in the same world!");
-            this.getPlayerFromName().sendMessage("Left Click Position was in:" + this.leftClickWorld.getColoredWorldString());
-            this.getPlayerFromName().sendMessage("Right Click Position was in:" + this.rightClickWorld.getColoredWorldString());
+            player.sendMessage("You need to select both coords in the same world!");
+            player.sendMessage("Left Click Position was in:" + this.leftClickWorld.getColoredWorldString());
+            player.sendMessage("Right Click Position was in:" + this.rightClickWorld.getColoredWorldString());
             return null;
         }
         return new MultiverseRegion(this.leftClick, this.rightClick, this.leftClickWorld);
@@ -205,7 +211,7 @@ public class PortalPlayerSession {
      * @return The {@link MVPortal} the player is standing in.
      */
     public MVPortal getUncachedStandingInPortal() {
-        return this.standingIn = this.plugin.getPortalManager().isPortal(this.getPlayerFromName(), this.loc);
+        return this.standingIn = this.plugin.getPortalManager().getPortal(this.loc);
     }
 
     /**
@@ -215,7 +221,7 @@ public class PortalPlayerSession {
      */
     public void playerDidTeleport(Location location) {
         PortalManager pm = this.plugin.getPortalManager();
-        if (pm.isPortal(this.getPlayerFromName(), location) != null) {
+        if (pm.getPortal(location) != null) {
             this.hasMovedOutOfPortal = false;
             return;
         }
@@ -236,7 +242,7 @@ public class PortalPlayerSession {
         }
 
         showStaticInfo(this.getPlayerFromName(), this.standingIn, "You are currently standing in ");
-        showPortalPriceInfo(this.standingIn);
+        this.showPortalPriceInfo(this.standingIn);
         return true;
     }
 
@@ -252,9 +258,10 @@ public class PortalPlayerSession {
 
     private void showPortalPriceInfo(MVPortal portal) {
         getPlayerFromName().sendMessage("More details for you: " + ChatColor.GREEN + portal.getDestination());
-        if (portal.getPrice() > 0) {
-            GenericBank bank = this.plugin.getCore().getBank();
-            getPlayerFromName().sendMessage("Price: " + ChatColor.GREEN + bank.getFormattedAmount(getPlayerFromName(), portal.getPrice(), portal.getCurrency()));
+        if (portal.getPrice() > 0D) {
+            getPlayerFromName().sendMessage("Price: " + ChatColor.GREEN + plugin.getCore().getEconomist().formatPrice(portal.getPrice(), portal.getCurrency()));
+        } else if (portal.getPrice() < 0D) {
+            getPlayerFromName().sendMessage("Prize: " + ChatColor.GREEN + plugin.getCore().getEconomist().formatPrice(-portal.getPrice(), portal.getCurrency()));
         } else {
             getPlayerFromName().sendMessage("Price: " + ChatColor.GREEN + "FREE!");
         }
@@ -280,8 +287,8 @@ public class PortalPlayerSession {
     }
 
     public String getFriendlyRemainingTimeMessage() {
-        String remaining = "There is a portal " + ChatColor.AQUA + "cooldown" + ChatColor.WHITE + " in effect. Please try again in " + ChatColor.GOLD;
-        //+ Integer.toString((int) this.getRemainingCooldown() / 1000) + "s.");
+        String remaining = "There is a portal " + ChatColor.AQUA + "cooldown" + ChatColor.WHITE + " in effect. Please try again in " + ChatColor.GOLD
+        + Integer.toString((int) this.getRemainingCooldown() / 1000) + "s.";
         int time = (int) this.getRemainingCooldown() / 1000;
         // Account for the fact that 0 seconds means 1
         time++;

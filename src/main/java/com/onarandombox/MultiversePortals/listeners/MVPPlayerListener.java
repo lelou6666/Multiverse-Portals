@@ -7,19 +7,11 @@
 
 package com.onarandombox.MultiversePortals.listeners;
 
-import com.fernferret.allpay.multiverse.GenericBank;
-import com.onarandombox.MultiverseCore.api.MVDestination;
-import com.onarandombox.MultiverseCore.api.MultiverseWorld;
-import com.onarandombox.MultiverseCore.destination.InvalidDestination;
-import com.onarandombox.MultiverseCore.enums.TeleportResult;
-import com.onarandombox.MultiverseCore.utils.MVTravelAgent;
-import com.onarandombox.MultiverseCore.api.SafeTTeleporter;
-import com.onarandombox.MultiversePortals.MVPortal;
-import com.onarandombox.MultiversePortals.MultiversePortals;
-import com.onarandombox.MultiversePortals.PortalPlayerSession;
-import com.onarandombox.MultiversePortals.event.MVPortalEvent;
-import com.onarandombox.MultiversePortals.utils.PortalFiller;
-import com.onarandombox.MultiversePortals.utils.PortalManager;
+import java.util.Date;
+import java.util.logging.Level;
+
+import com.onarandombox.MultiverseCore.utils.MVEconomist;
+import net.milkbowl.vault.economy.Economy;
 import org.bukkit.ChatColor;
 import org.bukkit.Location;
 import org.bukkit.Material;
@@ -27,24 +19,38 @@ import org.bukkit.TravelAgent;
 import org.bukkit.block.Block;
 import org.bukkit.block.BlockFace;
 import org.bukkit.entity.Player;
-import org.bukkit.event.Event.Type;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.EventPriority;
 import org.bukkit.event.Listener;
 import org.bukkit.event.block.Action;
-import org.bukkit.event.player.*;
+import org.bukkit.event.player.PlayerBucketEmptyEvent;
+import org.bukkit.event.player.PlayerBucketFillEvent;
+import org.bukkit.event.player.PlayerInteractEvent;
+import org.bukkit.event.player.PlayerPortalEvent;
+import org.bukkit.event.player.PlayerTeleportEvent;
 
-import java.util.Date;
-import java.util.logging.Level;
+import com.onarandombox.MultiverseCore.api.MVDestination;
+import com.onarandombox.MultiverseCore.api.MultiverseWorld;
+import com.onarandombox.MultiverseCore.api.SafeTTeleporter;
+import com.onarandombox.MultiverseCore.destination.InvalidDestination;
+import com.onarandombox.MultiverseCore.utils.MVTravelAgent;
+import com.onarandombox.MultiversePortals.MVPortal;
+import com.onarandombox.MultiversePortals.MultiversePortals;
+import com.onarandombox.MultiversePortals.PortalPlayerSession;
+import com.onarandombox.MultiversePortals.event.MVPortalEvent;
+import com.onarandombox.MultiversePortals.utils.PortalFiller;
+import com.onarandombox.MultiversePortals.utils.PortalManager;
 
 public class MVPPlayerListener implements Listener {
 
     private MultiversePortals plugin;
     private PortalFiller filler;
     private PortalManager portalManager;
+    private PlayerListenerHelper helper;
 
-    public MVPPlayerListener(MultiversePortals plugin) {
+    public MVPPlayerListener(MultiversePortals plugin, PlayerListenerHelper helper) {
         this.plugin = plugin;
+        this.helper = helper;
         this.filler = new PortalFiller(plugin.getCore());
     }
 
@@ -65,7 +71,7 @@ public class MVPPlayerListener implements Listener {
         this.plugin.log(Level.FINER, "Translated Block: " + event.getPlayer().getWorld().getBlockAt(translatedLocation) + ":" + event.getPlayer().getWorld().getBlockAt(translatedLocation).getType());
 
         PortalPlayerSession ps = this.plugin.getPortalSession(event.getPlayer());
-        MVPortal portal = portalManager.isPortal(event.getPlayer(), translatedLocation);
+        MVPortal portal = portalManager.getPortal(event.getPlayer(), translatedLocation);
         if (portal != null) {
             if (ps.isDebugModeOn()) {
                 ps.showDebugInfo(portal);
@@ -86,13 +92,16 @@ public class MVPPlayerListener implements Listener {
         this.plugin.log(Level.FINER, "Translated Block: " + event.getPlayer().getWorld().getBlockAt(translatedLocation) + ":" + event.getPlayer().getWorld().getBlockAt(translatedLocation).getType());
 
         PortalPlayerSession ps = this.plugin.getPortalSession(event.getPlayer());
-        MVPortal portal = portalManager.isPortal(event.getPlayer(), translatedLocation);
+        MVPortal portal = portalManager.getPortal(event.getPlayer(), translatedLocation);
         if (portal != null) {
             if (ps.isDebugModeOn()) {
                 ps.showDebugInfo(portal);
                 event.setCancelled(true);
             } else {
-
+                if (!portal.playerCanFillPortal(event.getPlayer())) {
+                    event.setCancelled(true);
+                    return;
+                }
                 Material fillMaterial = Material.WATER;
                 if (event.getBucket().equals(Material.LAVA_BUCKET)) {
                     fillMaterial = Material.LAVA;
@@ -109,13 +118,13 @@ public class MVPPlayerListener implements Listener {
         // Portal lighting stuff
         if (event.getAction() == Action.RIGHT_CLICK_BLOCK && event.getMaterial() == Material.FLINT_AND_STEEL) {
             // They're lighting somethin'
-            this.plugin.log(Level.FINER, "Player is ligting block: " + this.plugin.getCore().getLocationManipulation().strCoordsRaw(event.getClickedBlock().getLocation()));
+            this.plugin.log(Level.FINER, "Player is lighting block: " + this.plugin.getCore().getLocationManipulation().strCoordsRaw(event.getClickedBlock().getLocation()));
             PortalPlayerSession ps = this.plugin.getPortalSession(event.getPlayer());
             Location translatedLocation = this.getTranslatedLocation(event.getClickedBlock(), event.getBlockFace());
             if (!portalManager.isPortal(translatedLocation)) {
                 return;
             }
-            MVPortal portal = portalManager.isPortal(event.getPlayer(), translatedLocation);
+            MVPortal portal = portalManager.getPortal(event.getPlayer(), translatedLocation);
             if (event.getItem() == null) {
                 return;
             }
@@ -127,6 +136,13 @@ public class MVPPlayerListener implements Listener {
             // Cancel the event if there was a portal.
 
             if (portal != null) {
+
+                // Make sure the portal's frame around this point is made out of
+                // a valid material.
+                if (!portal.isFrameValid(translatedLocation)) {
+                    return;
+                }
+
                 this.plugin.log(Level.FINER, "Right Clicked: ");
                 this.plugin.log(Level.FINER, "Block Clicked: " + event.getClickedBlock() + ":" + event.getClickedBlock().getType());
                 this.plugin.log(Level.FINER, "Translated Block: " + event.getPlayer().getWorld().getBlockAt(translatedLocation) + ":" + event.getPlayer().getWorld().getBlockAt(translatedLocation).getType());
@@ -150,7 +166,9 @@ public class MVPPlayerListener implements Listener {
         // If we Found WorldEdit, return, we're not needed here.
         // If the item is not the Wand we've stetup we're not needed either
         // If the player doesn't have the perms, return also.
-        if (this.plugin.getWEAPI() != null || event.getPlayer().getItemInHand().getTypeId() != itemType || !this.plugin.getCore().getMVPerms().hasPermission(event.getPlayer(), "multiverse.portal.create", true)) {
+        if (plugin.getWorldEditConnection().isConnected()
+                || event.getPlayer().getItemInHand().getTypeId() != itemType
+                || !this.plugin.getCore().getMVPerms().hasPermission(event.getPlayer(), "multiverse.portal.create", true)) {
             return;
         }
 
@@ -172,6 +190,7 @@ public class MVPPlayerListener implements Listener {
         return newLoc;
     }
 
+<<<<<<< HEAD
     @EventHandler(priority = EventPriority.LOW)
     public void playerMove(PlayerMoveEvent event) {
         if (event.isCancelled() || !MultiversePortals.UseOnMove) {
@@ -245,29 +264,61 @@ public class MVPPlayerListener implements Listener {
         }
     }
 
+=======
+>>>>>>> refs/remotes/Multiverse/master
     @EventHandler
     public void playerPortal(PlayerPortalEvent event) {
+        if (event.isCancelled()) {
+            this.plugin.log(Level.FINE, "This Portal event was already cancelled.");
+            return;
+        }
         this.plugin.log(Level.FINER, "onPlayerPortal called!");
         PortalManager pm = this.plugin.getPortalManager();
+        Location playerPortalLoc = event.getPlayer().getLocation();
         // Determine if we're in a portal
-        MVPortal portal = pm.isPortal(event.getPlayer(), event.getPlayer().getLocation());
+        MVPortal portal = pm.getPortal(event.getPlayer(), playerPortalLoc);
+        Player p = event.getPlayer();
         // Even if the location was null, we still have to see if
         // someone wasn't exactly on (because they can do this).
         if (portal == null) {
             // Check around the player to make sure
-            Location newLoc = this.plugin.getCore().getSafeTTeleporter().findPortalBlockNextTo(event.getFrom());
-            if (newLoc != null) {
+            playerPortalLoc = this.plugin.getCore().getSafeTTeleporter().findPortalBlockNextTo(event.getFrom());
+            if (playerPortalLoc != null) {
                 this.plugin.log(Level.FINER, "Player was outside of portal, The location has been successfully translated.");
-                portal = pm.isPortal(event.getPlayer(), newLoc);
+                portal = pm.getPortal(event.getPlayer(), playerPortalLoc);
             }
         }
         if (portal != null) {
             this.plugin.log(Level.FINER, "There was a portal found!");
             MVDestination portalDest = portal.getDestination();
             if (portalDest != null && !(portalDest instanceof InvalidDestination)) {
+                if (!portal.isFrameValid(playerPortalLoc)) {
+                    event.getPlayer().sendMessage("This portal's frame is made of an " + ChatColor.RED + "incorrect material." + ChatColor.RED + " You should exit it now.");
+                    event.setCancelled(true);
+                    return;
+                }
                 PortalPlayerSession ps = this.plugin.getPortalSession(event.getPlayer());
+                if (portal.getHandlerScript() != null && !portal.getHandlerScript().isEmpty()) {
+                    try {
+                        if (helper.scriptPortal(event.getPlayer(), portalDest, portal, ps)) {
+                            // Portal handled by script
+                        } else {
+                            event.setCancelled(true);
+                        }
+                        return;
+                    } catch (IllegalStateException ignore) {
+                        // Portal not handled by script
+                    }
+                }
                 if (!ps.allowTeleportViaCooldown(new Date())) {
                     event.getPlayer().sendMessage(ps.getFriendlyRemainingTimeMessage());
+                    event.setCancelled(true);
+                    return;
+                }
+                // If they're using Access and they don't have permission and they're NOT excempt, return, they're not allowed to tp.
+                // No longer checking exemption status
+                if (MultiversePortals.EnforcePortalAccess && !this.plugin.getCore().getMVPerms().hasPermission(event.getPlayer(), portal.getPermission().getName(), true)) {
+                    this.helper.stateFailure(p.getDisplayName(), portal.getName());
                     event.setCancelled(true);
                     return;
                 }
@@ -277,19 +328,49 @@ public class MVPPlayerListener implements Listener {
                     SafeTTeleporter teleporter = this.plugin.getCore().getSafeTTeleporter();
                     event.setTo(teleporter.getSafeLocation(event.getPlayer(), portalDest));
                 }
+
+                boolean shouldPay = false;
+                double price = portal.getPrice();
+                int currency = portal.getCurrency();
+                MVEconomist economist = plugin.getCore().getEconomist();
+
+                // Stop the player if the portal costs and they can't pay
+                if (price != 0D && !p.hasPermission(portal.getExempt())) {
+                    shouldPay = true;
+                    if (price > 0D && !economist.isPlayerWealthyEnough(p, price, currency)) {
+                        p.sendMessage(economist.getNSFMessage(currency,
+                                "You need " + economist.formatPrice(price, currency) + " to enter the " + portal.getName() + " portal."));
+                        event.setCancelled(true);
+                        return;
+                    }
+                }
+
                 event.setPortalTravelAgent(agent);
                 event.useTravelAgent(true);
-                MVPortalEvent portalEvent = new MVPortalEvent(portalDest, event.getPlayer(), agent);
+                MVPortalEvent portalEvent = new MVPortalEvent(portalDest, event.getPlayer(), agent, portal);
                 this.plugin.getServer().getPluginManager().callEvent(portalEvent);
+
                 if (portalEvent.isCancelled()) {
                     event.setCancelled(true);
                     this.plugin.log(Level.FINE, "Someone cancelled the MVPlayerPortal Event!");
                     return;
+                } else if (shouldPay) {
+                    if (price < 0D) {
+                        economist.deposit(p, -price, currency);
+                    } else {
+                        economist.withdraw(p, price, currency);
+                    }
+                    p.sendMessage(String.format("You have %s %s for using %s.",
+                            price > 0D ? "been charged" : "earned",
+                            economist.formatPrice(price, currency),
+                            portal.getName()));
                 }
                 this.plugin.log(Level.FINE, "Sending player to a location via our Sexy Travel Agent!");
             } else if (!this.plugin.getMainConfig().getBoolean("portalsdefaulttonether", false)) {
                 // If portals should not default to the nether, cancel the event
-                event.getPlayer().sendMessage("This portal " + ChatColor.RED + "doesn't go anywhere." + ChatColor.RED + " You should exit it now.");
+                event.getPlayer().sendMessage(String.format(
+                        "This portal %sdoesn't go anywhere. You should exit it now.", ChatColor.RED));
+                this.plugin.log(Level.FINE, "Event canceled because this was a MVPortal with an invalid destination. But you had 'portalsdefaulttonether' set to false!");
                 event.setCancelled(true);
             }
         }

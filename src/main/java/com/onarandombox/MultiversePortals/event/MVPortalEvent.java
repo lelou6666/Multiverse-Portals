@@ -7,14 +7,15 @@
 
 package com.onarandombox.MultiversePortals.event;
 
-import com.onarandombox.MultiverseCore.api.MVDestination;
-import com.onarandombox.MultiversePortals.enums.PortalType;
 import org.bukkit.Location;
 import org.bukkit.TravelAgent;
 import org.bukkit.entity.Player;
 import org.bukkit.event.Cancellable;
 import org.bukkit.event.Event;
 import org.bukkit.event.HandlerList;
+import com.onarandombox.MultiverseCore.api.MVDestination;
+import com.onarandombox.MultiversePortals.MVPortal;
+import com.onarandombox.MultiversePortals.enums.PortalType;
 
 /**
  * Multiverse 2
@@ -23,19 +24,34 @@ import org.bukkit.event.HandlerList;
  */
 public class MVPortalEvent extends Event implements Cancellable {
     private Player teleportee;
+    private MVPortal sendingPortal;
     private MVDestination destination;
     private TravelAgent travelAgent;
     private boolean isCancelled;
 
+    /**
+     * Old constructor did not provide enough intel
+     *
+     * @deprecated use {@link MVPortalEvent(MVDestination destination, Player
+     *             teleportee, TravelAgent travelAgent, MVPortal sendingPortal)}
+     *             instead.
+     */
+    @Deprecated
     public MVPortalEvent(MVDestination destination, Player teleportee, TravelAgent travelAgent) {
-        super("MVPortal");
         this.teleportee = teleportee;
         this.destination = destination;
         this.travelAgent = travelAgent;
     }
 
+    public MVPortalEvent(MVDestination destination, Player teleportee, TravelAgent travelAgent, MVPortal sendingPortal) {
+        this.teleportee = teleportee;
+        this.destination = destination;
+        this.travelAgent = travelAgent;
+        this.sendingPortal = sendingPortal;
+    }
+
     public MVPortalEvent(MVDestination destination, Player teleportee) {
-        this(destination, teleportee, null);
+        this(destination, teleportee, null, null);
     }
 
     private static final HandlerList HANDLERS = new HandlerList();
@@ -104,6 +120,15 @@ public class MVPortalEvent extends Event implements Cancellable {
      */
     public TravelAgent getTravelAgent() {
         return this.travelAgent;
+    }
+
+    /**
+     * Returns the Portal sending the player
+     *
+     * @return The portal the player is sent from
+     */
+    public MVPortal getSendingPortal() {
+        return this.sendingPortal;
     }
 
     @Override

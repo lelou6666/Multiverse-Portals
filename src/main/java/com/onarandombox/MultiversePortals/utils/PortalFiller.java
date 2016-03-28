@@ -7,15 +7,17 @@
 
 package com.onarandombox.MultiversePortals.utils;
 
-import com.onarandombox.MultiverseCore.MultiverseCore;
-import com.onarandombox.MultiverseCore.utils.LocationManipulation;
+import java.util.logging.Level;
+
 import org.bukkit.ChatColor;
 import org.bukkit.Location;
 import org.bukkit.Material;
 import org.bukkit.block.Block;
 import org.bukkit.entity.Player;
 
-import java.util.logging.Level;
+import com.onarandombox.MultiverseCore.MultiverseCore;
+import com.onarandombox.MultiverseCore.utils.LocationManipulation;
+import com.onarandombox.MultiversePortals.MVPortal;
 
 public class PortalFiller {
     private MultiverseCore plugin;
@@ -64,7 +66,7 @@ public class PortalFiller {
             if (!r.containsVector(tmpLoc.getLocation())) {
                 return;
             }
-            this.plugin.log(Level.FINEST, "Moving Right/Left: " + LocationManipulation.strCoordsRaw(tmpLoc.getLocation()));
+            this.plugin.log(Level.FINEST, "Moving Right/Left: " + this.plugin.getLocationManipulation().strCoordsRaw(tmpLoc.getLocation()));
             doFill(tmpLoc, useX, useZ, r, type);
         }
         if (isValidPortalRegion(newLoc.getRelative(useX * 0, 1, useZ * 0).getLocation(), type)) {
@@ -72,7 +74,7 @@ public class PortalFiller {
             if (!r.containsVector(tmpLoc.getLocation())) {
                 return;
             }
-            this.plugin.log(Level.FINEST, "Moving Up" + LocationManipulation.strCoordsRaw(tmpLoc.getLocation()));
+            this.plugin.log(Level.FINEST, "Moving Up" + this.plugin.getLocationManipulation().strCoordsRaw(tmpLoc.getLocation()));
             doFill(tmpLoc, useX, useZ, r, type);
         }
         if (isValidPortalRegion(newLoc.getRelative(useX * -1, 0, useZ * -1).getLocation(), type)) {
@@ -80,7 +82,7 @@ public class PortalFiller {
             if (!r.containsVector(tmpLoc.getLocation())) {
                 return;
             }
-            this.plugin.log(Level.FINEST, "Moving Left/Right" + LocationManipulation.strCoordsRaw(tmpLoc.getLocation()));
+            this.plugin.log(Level.FINEST, "Moving Left/Right" + this.plugin.getLocationManipulation().strCoordsRaw(tmpLoc.getLocation()));
             doFill(tmpLoc, useX, useZ, r, type);
         }
         if (isValidPortalRegion(newLoc.getRelative(useX * 0, -1, useZ * 0).getLocation(), type)) {
@@ -88,7 +90,7 @@ public class PortalFiller {
             if (!r.containsVector(tmpLoc.getLocation())) {
                 return;
             }
-            this.plugin.log(Level.FINEST, "Moving Down" + LocationManipulation.strCoordsRaw(tmpLoc.getLocation()));
+            this.plugin.log(Level.FINEST, "Moving Down" + this.plugin.getLocationManipulation().strCoordsRaw(tmpLoc.getLocation()));
             doFill(tmpLoc, useX, useZ, r, type);
         }
     }
@@ -104,6 +106,6 @@ public class PortalFiller {
         if (l.getWorld().getBlockAt(l).getType() == portalType) {
             return false;
         }
-        return (type == Material.PORTAL || type == Material.LONG_GRASS || type == Material.VINE || type == Material.SNOW || type == Material.AIR || type == Material.WATER || type == Material.STATIONARY_WATER || type == Material.LAVA || type == Material.STATIONARY_LAVA);
+        return MVPortal.isPortalInterior(type);
     }
 }

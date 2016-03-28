@@ -7,9 +7,10 @@
 
 package com.onarandombox.MultiversePortals.utils;
 
-import com.onarandombox.MultiverseCore.api.MultiverseWorld;
 import org.bukkit.Location;
 import org.bukkit.util.Vector;
+
+import com.onarandombox.MultiverseCore.api.MultiverseWorld;
 
 /**
  * This is a placeholder of good things to come...
@@ -33,6 +34,10 @@ public class MultiverseRegion {
             this.max = Vector.getMaximum(tmp1, tmp2);
             this.world = w;
         }
+    }
+
+    public MultiverseRegion(Location loc1, Location loc2, MultiverseWorld w) {
+        this(loc1.toVector(), loc2.toVector(), w);
     }
 
     public MultiverseRegion(Vector pos1, Vector pos2, MultiverseWorld w) {

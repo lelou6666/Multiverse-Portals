@@ -10,4 +10,7 @@ useonmove: true
 portalsdefaulttonether: false
 enforceportalaccess: true
 portalcooldown: 1000
-version: 2.6
+clearonremove: false
+teleportvehicles: true
+framematerials: []
+version: 2.7
